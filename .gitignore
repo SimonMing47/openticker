@@ -1,5 +1,6 @@
 node_modules
 .tooling
+.playwright-cli
 .DS_Store
 coverage
 *.log
