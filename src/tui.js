@@ -90,7 +90,7 @@ export async function startTui() {
     top: 4,
     left: 0,
     width: "100%",
-    height: 5,
+    height: 6,
     style: {
       bg: theme.bg
     }
@@ -98,10 +98,10 @@ export async function startTui() {
 
   const content = blessed.box({
     parent: screen,
-    top: 9,
+    top: 10,
     left: 0,
     width: "100%",
-    height: "100%-12",
+    height: "100%-13",
     style: {
       bg: theme.bg
     }
@@ -263,16 +263,71 @@ export async function startTui() {
     }
   });
 
-  const actionButtons = createActionButtons(actionBar, {
+  const primaryDock = blessed.box({
+    parent: actionBar,
+    top: 0,
+    left: 0,
+    width: "69%",
+    height: 6,
+    label: " 指令坞 ",
+    tags: true,
+    style: {
+      bg: theme.panel,
+      fg: theme.text,
+      border: {
+        fg: theme.border
+      }
+    },
+    border: "line"
+  });
+
+  const systemDock = blessed.box({
+    parent: actionBar,
+    top: 0,
+    left: "70%",
+    width: "30%",
+    height: 6,
+    label: " 控制中心 ",
+    tags: true,
+    style: {
+      bg: theme.panelAlt,
+      fg: theme.text,
+      border: {
+        fg: theme.accent
+      }
+    },
+    border: "line"
+  });
+
+  const primaryHint = blessed.box({
+    parent: primaryDock,
+    top: 0,
+    left: 2,
+    width: "100%-4",
+    height: 1,
+    tags: true,
+    content: `{${tagColors.dim}-fg}新建、快启、编辑、运行。{/}`
+  });
+
+  const systemHint = blessed.box({
+    parent: systemDock,
+    top: 0,
+    left: 2,
+    width: "100%-4",
+    height: 1,
+    tags: true,
+    content: ""
+  });
+
+  const actionButtons = createActionButtons(primaryDock, {
     onCreate: () => void openEditor({ quick: false }),
     onQuickStart: () => void openEditor({ quick: true }),
     onEdit: () => void editSelectedTask(),
-    onRun: () => void runSelectedTask(),
-    onToggle: () => void toggleSelectedTask(),
-    onDelete: () => void deleteSelectedTask(),
-    onDaemon: () => void toggleDaemon(),
-    onService: () => void toggleService(),
-    onHelp: () => void showHelp()
+    onRun: () => void runSelectedTask()
+  });
+
+  const systemButtons = createSystemButtons(systemDock, {
+    onSystem: () => void openControlCenter()
   });
 
   taskList.on("select", (_, index) => {
@@ -364,6 +419,18 @@ export async function startTui() {
   async function render() {
     const tasks = state.config?.tasks || [];
     header.setContent(renderHeader(state));
+    layoutButtonRow(primaryDock, actionButtons, {
+      top: 2,
+      left: 2,
+      right: 2,
+      gap: 1
+    });
+    layoutButtonRow(systemDock, systemButtons, {
+      top: 2,
+      left: 2,
+      right: 2,
+      gap: 1
+    });
 
     taskList.setItems(tasks.map((task) => formatTaskListItem(task)));
     if (tasks.length > 0) {
@@ -375,6 +442,7 @@ export async function startTui() {
     logPanel.setContent(await renderLogPanel(getSelectedTask(state)));
     footer.setContent(renderFooter());
     updateActionButtonLabels(actionButtons, state);
+    updateSystemButtonLabels(systemButtons, systemHint, state);
     screen.render();
   }
 
@@ -522,6 +590,16 @@ export async function startTui() {
     await refresh(true);
   }
 
+  async function openControlCenter() {
+    state.modalOpen = true;
+    try {
+      await showSystemCenter(screen, state);
+    } finally {
+      state.modalOpen = false;
+      await refresh(true);
+    }
+  }
+
   async function showHelp() {
     state.modalOpen = true;
     try {
@@ -542,12 +620,14 @@ export async function startTui() {
           "",
           "界面说明：",
           "- 左侧是任务列表",
+          "- 顶部控制坞只保留高频动作",
+          "- 控制中心收纳 daemon / service",
           "- 右上显示任务摘要和执行状态",
           "- 中间显示提示词或命令说明",
           "- 右下是最近日志预览",
           "",
           "表单说明：",
-          "- 新建和快速启动都会打开一个中文弹窗表单",
+          "- 新建和快速启动都会打开一个中文 sheet 表单",
           "- 快速启动默认隐藏高级选项",
           "- 保存并运行会立刻执行一次，但不会吞掉未来计划"
         ].join("\n")
@@ -583,8 +663,8 @@ async function openTaskEditor(screen, state, options = {}) {
     parent: overlay,
     top: "center",
     left: "center",
-    width: "86%",
-    height: "82%",
+    width: "84%",
+    height: "84%",
     border: "line",
     label: ` ${existingTask ? "编辑任务" : quick ? "快速启动" : "新建任务"} `,
     style: {
@@ -601,21 +681,22 @@ async function openTaskEditor(screen, state, options = {}) {
     top: 1,
     left: 2,
     width: "100%-4",
-    height: 3,
+    height: 4,
     tags: true,
     content:
-      `{${tagColors.accent}-fg}OpenTicker{/} {${tagColors.dim}-fg}// 中文任务表单 · 赛博终端模式{/}\n` +
-      `${quick ? "只填核心字段就能开始，保存并运行不会吞掉未来计划。" : "先填基础字段，按 a 展开高级选项。"}`
+      `{bold}{${tagColors.accent}-fg}OpenTicker{/}{/bold} {${tagColors.dim}-fg}// 中文任务表单 · Sheet 模式{/}\n` +
+      `${quick ? "只填核心字段就能启动，保存并运行不会吞掉未来计划。" : "核心字段优先，高级项默认收起；先建再细调。"}\n` +
+      `{${tagColors.dim}-fg}模板、CLI 和触发方式都支持一键切换。{/}`
   });
 
   const fieldList = blessed.list({
     parent: modal,
-    top: 5,
+    top: 6,
     left: 1,
-    width: "49%",
-    height: "100%-11",
+    width: "48%",
+    height: "100%-13",
     border: "line",
-    label: " 配置项 ",
+    label: " 表单 ",
     keys: true,
     vi: true,
     mouse: true,
@@ -640,12 +721,12 @@ async function openTaskEditor(screen, state, options = {}) {
 
   const preview = blessed.box({
     parent: modal,
-    top: 5,
-    left: "50%",
-    width: "49%-1",
-    height: "100%-11",
+    top: 6,
+    left: "49%",
+    width: "51%-1",
+    height: "100%-13",
     border: "line",
-    label: " 说明 / 预览 ",
+    label: " 实时预览 ",
     tags: true,
     scrollable: true,
     alwaysScroll: true,
@@ -662,27 +743,38 @@ async function openTaskEditor(screen, state, options = {}) {
     }
   });
 
-  const cancelButton = createModalButton(modal, {
-    left: 2,
-    content: "取消",
-    color: theme.danger
+  const footerBar = createModalFooter(modal, {
+    hint:
+      `{${tagColors.dim}-fg}Esc 取消 · Enter 编辑字段 · Space 快切 · Ctrl+S 保存 · Ctrl+R 保存并运行{/}`
   });
-  const saveButton = createModalButton(modal, {
-    left: "center-8",
-    content: "仅保存",
-    color: theme.border
-  });
-  const saveRunButton = createModalButton(modal, {
-    right: 2,
-    content: "保存并运行",
-    color: theme.success
-  });
+
+  const modalButtons = createButtonRow(
+    footerBar,
+    [
+      { label: "取消", hotkey: "Esc", color: theme.danger, onPress: () => close(null) },
+      { label: "保存", hotkey: "Ctrl+S", color: theme.border, onPress: () => void save(false) },
+      { label: "保存并运行", hotkey: "Ctrl+R", color: theme.success, onPress: () => void save(true) }
+    ],
+    {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1,
+      background: theme.panelAlt
+    }
+  );
 
   const renderForm = () => {
     rows.splice(0, rows.length, ...buildFormRows(formState, { quick, editing: Boolean(existingTask) }));
     fieldList.setItems(rows.map((row) => formatFormRow(row, formState)));
     fieldList.select(Math.min(selectedIndex, rows.length - 1));
     preview.setContent(renderFormPreview(formState, rows[selectedIndex]));
+    layoutButtonRow(footerBar, modalButtons, {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1
+    });
     screen.render();
   };
 
@@ -754,14 +846,6 @@ async function openTaskEditor(screen, state, options = {}) {
     await save(false);
   });
   modal.key(["C-r"], async () => {
-    await save(true);
-  });
-
-  cancelButton.on("press", () => close(null));
-  saveButton.on("press", async () => {
-    await save(false);
-  });
-  saveRunButton.on("press", async () => {
     await save(true);
   });
 
@@ -1224,8 +1308,8 @@ async function renderLogPanel(task) {
 
 function renderFooter() {
   return [
-    `{${tagColors.dim}-fg}[n] 新建  [s] 快速启动  [e] 编辑  [r] 执行  [space] 启停  [x] 删除  [d] 守护  [i] 服务  [?] 帮助  [q] 退出{/}`,
-    `{${tagColors.dim}-fg}提示：快速启动会打开一个中文表单，默认值已经预填，保存并运行不会吞掉未来计划。{/}`
+    `{${tagColors.dim}-fg}[n] 新建  [s] 快启  [e] 编辑  [r] 执行  [space] 启停  [x] 删除  [d] 守护  [i] 服务  [?] 帮助  [q] 退出{/}`,
+    `{${tagColors.dim}-fg}提示：主界面保留高频按钮，后台控制收进控制中心；快速启动会预填默认内容。{/}`
   ].join("\n");
 }
 
@@ -1274,12 +1358,12 @@ function renderFormPreview(formState, row) {
 
   previewLines.push(
     "",
-    `{${tagColors.dim}-fg}操作{/}`,
+    `{${tagColors.dim}-fg}表单操作{/}`,
     "- Enter 编辑当前字段",
     "- Space 快速切换枚举/开关",
     "- a 展开或收起高级选项",
-    "- Ctrl+S 仅保存",
-    "- Ctrl+R 保存并运行"
+    "- Ctrl+S 保存任务",
+    "- Ctrl+R 保存并立即运行"
   );
 
   return previewLines.join("\n");
@@ -1287,36 +1371,19 @@ function renderFormPreview(formState, row) {
 
 function createActionButtons(parent, actions) {
   const specs = [
-    { label: "新建", hotkey: "N", onPress: actions.onCreate, color: theme.border, left: 1, top: 0, width: 10 },
-    { label: "快启", hotkey: "S", onPress: actions.onQuickStart, color: theme.accent, left: 12, top: 0, width: 10 },
-    { label: "编辑", hotkey: "E", onPress: actions.onEdit, color: theme.border, left: 23, top: 0, width: 10 },
-    { label: "运行", hotkey: "R", onPress: actions.onRun, color: theme.success, left: 34, top: 0, width: 10 },
-    { label: "启停", hotkey: "空格", onPress: actions.onToggle, color: theme.warning, left: 45, top: 0, width: 12 },
-    { label: "删除", hotkey: "X", onPress: actions.onDelete, color: theme.danger, left: 58, top: 0, width: 10 },
-    { label: "守护", hotkey: "D", onPress: actions.onDaemon, color: theme.border, left: 1, top: 2, width: 14 },
-    { label: "服务", hotkey: "I", onPress: actions.onService, color: theme.border, left: 16, top: 2, width: 14 },
-    { label: "帮助", hotkey: "?", onPress: actions.onHelp, color: theme.accent, left: 31, top: 2, width: 12 }
+    { label: "新建", hotkey: "N", onPress: actions.onCreate, color: theme.border },
+    { label: "快启", hotkey: "S", onPress: actions.onQuickStart, color: theme.accent },
+    { label: "编辑", hotkey: "E", onPress: actions.onEdit, color: theme.border },
+    { label: "运行", hotkey: "R", onPress: actions.onRun, color: theme.success }
   ];
 
-  return specs.map((spec) => {
-    const button = blessed.button({
-      parent,
-      top: spec.top,
-      left: spec.left,
-      height: 3,
-      width: spec.width,
-      mouse: true,
-      keys: true,
-      content: ` ${spec.label} `,
-      align: "center",
-      valign: "middle",
-      border: "line",
-      style: buttonStyle(spec.color)
-    });
-    button.on("press", spec.onPress);
-    button.hotkey = spec.hotkey;
-    button.baseLabel = spec.label;
-    return button;
+  return createButtonRow(parent, specs, {
+    top: 2,
+    left: 2,
+    right: 2,
+    gap: 1,
+    showHotkeys: false,
+    minWidth: 8
   });
 }
 
@@ -1324,43 +1391,171 @@ function updateActionButtonLabels(buttons, state) {
   if (!buttons?.length) {
     return;
   }
+  const task = getSelectedTask(state);
 
-  if (buttons[6]) {
-    buttons[6].setContent(state.daemon?.running ? " 守护:停止 " : " 守护:启动 ");
+  if (buttons[2]) {
+    buttons[2].setContent(task ? " 编辑 " : " 选择 ");
   }
-  if (buttons[7]) {
-    if (!state.service?.installed) {
-      buttons[7].setContent(" 服务:安装 ");
-    } else if (state.service.active) {
-      buttons[7].setContent(" 服务:停止 ");
-    } else {
-      buttons[7].setContent(" 服务:启动 ");
-    }
+  if (buttons[3]) {
+    buttons[3].setContent(task ? " 运行 " : " 暂无 ");
   }
 }
 
-function createModalButton(parent, options) {
-  return blessed.button({
-    parent,
-    bottom: 1,
-    left: options.left,
-    right: options.right,
-    height: 3,
-    width: options.content.length + 8,
-    mouse: true,
-    keys: true,
-    align: "center",
-    valign: "middle",
-    content: ` ${options.content} `,
-    border: "line",
-    style: buttonStyle(options.color)
+function createSystemButtons(parent, actions) {
+  const specs = [
+    { label: "系统", hotkey: "Enter", onPress: actions.onSystem, color: theme.accent }
+  ];
+
+  return createButtonRow(parent, specs, {
+    top: 2,
+    left: 2,
+    right: 2,
+    gap: 1,
+    showHotkeys: false,
+    minWidth: 8
   });
 }
 
-function buttonStyle(color) {
+function updateSystemButtonLabels(buttons, hintBox, state) {
+  if (hintBox) {
+    const daemonText = state.daemon?.running ? "守护在线" : "守护离线";
+    let serviceText = "服务未装";
+    if (state.service?.installed) {
+      serviceText = state.service.active ? "服务运行中" : "服务已安装";
+    }
+    hintBox.setContent(
+      `{${tagColors.dim}-fg}${daemonText} · ${serviceText}{/}`
+    );
+  }
+
+  if (!buttons?.length) {
+    return;
+  }
+  buttons[0].setContent(" 系统 ");
+}
+
+function createModalFooter(parent, options = {}) {
+  const footer = blessed.box({
+    parent,
+    bottom: 0,
+    left: 1,
+    width: "100%-2",
+    height: 5,
+    style: {
+      bg: theme.panelAlt,
+      fg: theme.dim
+    }
+  });
+
+  if (options.hint) {
+    blessed.box({
+      parent: footer,
+      top: 0,
+      left: 1,
+      width: "100%-2",
+      height: 1,
+      tags: true,
+      content: options.hint,
+      style: {
+        bg: theme.panelAlt,
+        fg: theme.dim
+      }
+    });
+  }
+
+  return footer;
+}
+
+function createButtonRow(parent, specs, options = {}) {
+  const buttons = specs.map((spec) => {
+    const button = blessed.button({
+      parent,
+      top: options.top ?? 1,
+      left: 0,
+      width: 12,
+      height: options.height || 3,
+      mouse: true,
+      keys: true,
+      align: "center",
+      valign: "middle",
+      content:
+        options.showHotkeys === false
+          ? ` ${spec.label} `
+          : ` ${spec.label}${spec.hotkey ? ` · ${spec.hotkey}` : ""} `,
+      border: "line",
+      style: buttonStyle(spec.color, options.background)
+    });
+    button.hotkey = spec.hotkey;
+    button.baseLabel = spec.label;
+    button.on("press", spec.onPress);
+    return button;
+  });
+
+  layoutButtonRow(parent, buttons, options);
+  return buttons;
+}
+
+function layoutButtonRow(parent, buttons, options = {}) {
+  if (!parent || !buttons?.length) {
+    return;
+  }
+
+  const gap = options.gap ?? 1;
+  const left = options.left ?? 1;
+  const right = options.right ?? 1;
+  const minWidth = options.minWidth ?? 12;
+  const parentWidth = resolveElementWidth(parent);
+  const totalWidth = Math.max(
+    parentWidth - left - right - gap * (buttons.length - 1),
+    buttons.length * minWidth
+  );
+  const buttonWidth = Math.max(Math.floor(totalWidth / buttons.length), minWidth);
+
+  buttons.forEach((button, index) => {
+    button.top = options.top ?? 1;
+    button.left = left + index * (buttonWidth + gap);
+    button.width = buttonWidth;
+  });
+}
+
+function resolveElementWidth(element) {
+  if (!element) {
+    return 0;
+  }
+
+  if (typeof element.width === "number") {
+    return element.width;
+  }
+
+  const text = String(element.width || "").trim();
+  const baseWidth = element.parent
+    ? resolveElementWidth(element.parent)
+    : Number(element.screen?.width || 0);
+
+  const percentMatch = text.match(/^(\d+)%$/);
+  if (percentMatch) {
+    return Math.floor(baseWidth * Number(percentMatch[1]) / 100);
+  }
+
+  const percentOffsetMatch = text.match(/^(\d+)%([+-]\d+)$/);
+  if (percentOffsetMatch) {
+    return (
+      Math.floor(baseWidth * Number(percentOffsetMatch[1]) / 100) +
+      Number(percentOffsetMatch[2])
+    );
+  }
+
+  if (/^\d+$/.test(text)) {
+    return Number(text);
+  }
+
+  return baseWidth;
+}
+
+function buttonStyle(color, background = theme.panel) {
   return {
     fg: theme.text,
-    bg: theme.panel,
+    bg: background,
     border: {
       fg: color
     },
@@ -1488,7 +1683,7 @@ async function askMultilineInput(screen, title, initial = "", placeholder = "") 
     top: 3,
     left: 1,
     width: "100%-2",
-    height: "100%-7",
+    height: "100%-9",
     border: "line",
     keys: true,
     mouse: true,
@@ -1509,15 +1704,8 @@ async function askMultilineInput(screen, title, initial = "", placeholder = "") 
   });
   editor.setValue(initial);
 
-  const cancelButton = createModalButton(modal, {
-    left: "center-12",
-    content: "取消",
-    color: theme.danger
-  });
-  const saveButton = createModalButton(modal, {
-    left: "center+2",
-    content: "保存",
-    color: theme.success
+  const footerBar = createModalFooter(modal, {
+    hint: `{${tagColors.dim}-fg}Esc 取消 · Ctrl+S 保存{/}`
   });
 
   let resolver;
@@ -1531,23 +1719,53 @@ async function askMultilineInput(screen, title, initial = "", placeholder = "") 
     resolver(value);
   };
 
+  const footerButtons = createButtonRow(
+    footerBar,
+    [
+      { label: "取消", hotkey: "Esc", color: theme.danger, onPress: () => close(null) },
+      { label: "保存", hotkey: "Ctrl+S", color: theme.success, onPress: () => close(editor.getValue()) }
+    ],
+    {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1,
+      background: theme.panelAlt
+    }
+  );
+
   editor.focus();
   modal.key(["escape"], () => close(null));
   modal.key(["C-s"], () => close(editor.getValue()));
-  saveButton.on("press", () => close(editor.getValue()));
-  cancelButton.on("press", () => close(null));
+  layoutButtonRow(footerBar, footerButtons, {
+    top: 1,
+    left: 2,
+    right: 2,
+    gap: 1
+  });
   screen.render();
 
   return promise;
 }
 
 async function askConfirm(screen, title, body) {
-  const modal = blessed.box({
+  const overlay = blessed.box({
     parent: screen,
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    style: {
+      bg: "#02040b"
+    }
+  });
+
+  const modal = blessed.box({
+    parent: overlay,
     top: "center",
     left: "center",
     width: "56%",
-    height: 9,
+    height: 11,
     label: ` ${title} `,
     border: "line",
     style: {
@@ -1564,19 +1782,8 @@ async function askConfirm(screen, title, body) {
     top: 1,
     left: 2,
     width: "100%-4",
-    height: 2,
+    height: 3,
     content: body
-  });
-
-  const noButton = createModalButton(modal, {
-    left: "center-12",
-    content: "取消",
-    color: theme.danger
-  });
-  const yesButton = createModalButton(modal, {
-    left: "center+2",
-    content: "确定",
-    color: theme.success
   });
 
   let resolver;
@@ -1585,29 +1792,78 @@ async function askConfirm(screen, title, body) {
   });
 
   const close = (value) => {
-    modal.destroy();
+    overlay.destroy();
     screen.render();
     resolver(value);
   };
 
-  yesButton.on("press", () => close(true));
-  noButton.on("press", () => close(false));
+  const footerBar = createModalFooter(modal, {
+    hint: `{${tagColors.dim}-fg}Esc 取消 · Enter 确认{/}`
+  });
+
+  const footerButtons = createButtonRow(
+    footerBar,
+    [
+      { label: "取消", hotkey: "Esc", color: theme.danger, onPress: () => close(false) },
+      { label: "确定", hotkey: "Enter", color: theme.success, onPress: () => close(true) }
+    ],
+    {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1,
+      background: theme.panelAlt
+    }
+  );
+
   modal.key(["escape"], () => close(false));
   modal.key(["enter"], () => close(true));
-  yesButton.focus();
+  layoutButtonRow(footerBar, footerButtons, {
+    top: 1,
+    left: 2,
+    right: 2,
+    gap: 1
+  });
+  footerButtons[1].focus();
   screen.render();
   return promise;
 }
 
 async function showText(screen, title, content) {
-  const modal = blessed.box({
+  const overlay = blessed.box({
     parent: screen,
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    style: {
+      bg: "#02040b"
+    }
+  });
+
+  const modal = blessed.box({
+    parent: overlay,
     top: "center",
     left: "center",
     width: "78%",
-    height: "76%",
+    height: "78%",
     label: ` ${title} `,
     border: "line",
+    style: {
+      bg: theme.panel,
+      fg: theme.text,
+      border: {
+        fg: theme.border
+      }
+    }
+  });
+
+  const body = blessed.box({
+    parent: modal,
+    top: 1,
+    left: 1,
+    width: "100%-2",
+    height: "100%-7",
     scrollable: true,
     alwaysScroll: true,
     keys: true,
@@ -1620,6 +1876,103 @@ async function showText(screen, title, content) {
     content,
     style: {
       bg: theme.panel,
+      fg: theme.text
+    }
+  });
+
+  const footerBar = createModalFooter(modal, {
+    hint: `{${tagColors.dim}-fg}Esc / Enter / Q 关闭{/}`
+  });
+
+  const footerButtons = createButtonRow(
+    footerBar,
+    [{ label: "关闭", hotkey: "Esc", color: theme.border, onPress: () => close() }],
+    {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1,
+      background: theme.panelAlt
+    }
+  );
+
+  const close = () => {
+    overlay.destroy();
+    screen.render();
+    resolvePromise();
+  };
+
+  let resolvePromise = () => {};
+
+  return new Promise((resolve) => {
+    resolvePromise = resolve;
+    modal.key(["escape", "q", "enter"], () => close());
+    layoutButtonRow(footerBar, footerButtons, {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1
+    });
+    body.focus();
+    screen.render();
+  });
+}
+
+async function showSystemCenter(screen, state) {
+  const overlay = blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    style: {
+      bg: "#02040b"
+    }
+  });
+
+  const modal = blessed.box({
+    parent: overlay,
+    top: "center",
+    left: "center",
+    width: "62%",
+    height: 17,
+    label: " 控制中心 ",
+    border: "line",
+    style: {
+      bg: theme.panel,
+      fg: theme.text,
+      border: {
+        fg: theme.accent
+      }
+    }
+  });
+
+  blessed.box({
+    parent: modal,
+    top: 1,
+    left: 2,
+    width: "100%-4",
+    height: 2,
+    tags: true,
+    content:
+      `{bold}后台控制{/bold}\n{${tagColors.dim}-fg}把守护进程和系统服务都收进这里，主界面只保留高频任务动作。{/}`
+  });
+
+  const statusBox = blessed.box({
+    parent: modal,
+    top: 4,
+    left: 1,
+    width: "100%-2",
+    height: 7,
+    border: "line",
+    label: " 状态 ",
+    tags: true,
+    padding: {
+      left: 1,
+      right: 1
+    },
+    style: {
+      bg: theme.panelAlt,
       fg: theme.text,
       border: {
         fg: theme.border
@@ -1627,13 +1980,120 @@ async function showText(screen, title, content) {
     }
   });
 
-  return new Promise((resolve) => {
-    modal.key(["escape", "q", "enter"], () => {
-      modal.destroy();
-      screen.render();
-      resolve();
+  let resolvePromise = () => {};
+  const close = () => {
+    overlay.destroy();
+    screen.render();
+    resolvePromise();
+  };
+
+  const footerBar = createModalFooter(modal, {
+    hint: `{${tagColors.dim}-fg}Enter 执行按钮 · Esc 关闭{/}`
+  });
+
+  const footerButtons = createButtonRow(
+    footerBar,
+    [
+      { label: "守护", hotkey: "D", color: theme.warning, onPress: () => void toggleDaemonInside() },
+      { label: "服务", hotkey: "I", color: theme.border, onPress: () => void toggleServiceInside() },
+      { label: "关闭", hotkey: "Esc", color: theme.accent, onPress: () => close() }
+    ],
+    {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1,
+      background: theme.panelAlt
+    }
+  );
+
+  function renderStatus() {
+    const daemon = state.daemon || { running: false };
+    const service = state.service || { installed: false, active: false };
+
+    const daemonLine = daemon.running
+      ? `{${tagColors.success}-fg}在线{/}  pid ${daemon.pid || "-"}`
+      : `{${tagColors.warning}-fg}离线{/}`;
+
+    let serviceLine = `{${tagColors.warning}-fg}未安装{/}`;
+    if (service.installed) {
+      serviceLine = service.active
+        ? `{${tagColors.success}-fg}已启动{/}`
+        : `{${tagColors.warning}-fg}已安装未启动{/}`;
+    }
+
+    statusBox.setContent(
+      [
+        `${infoLabel("守护进程")} ${daemonLine}`,
+        `${infoLabel("系统服务")} ${serviceLine}`,
+        "",
+        `${infoLabel("建议")}`,
+        "- 日常开发临时跑任务，用守护进程更轻。",
+        "- 想开机后也自动常驻，用系统服务。",
+        "- 删除任务和帮助说明保留在主界面快捷键。"
+      ].join("\n")
+    );
+
+    footerButtons[0].setContent(
+      daemon.running ? " 停止守护 · D " : " 启动守护 · D "
+    );
+
+    if (!service.installed) {
+      footerButtons[1].setContent(" 安装服务 · I ");
+    } else if (service.active) {
+      footerButtons[1].setContent(" 停止服务 · I ");
+    } else {
+      footerButtons[1].setContent(" 启动服务 · I ");
+    }
+
+    layoutButtonRow(footerBar, footerButtons, {
+      top: 1,
+      left: 2,
+      right: 2,
+      gap: 1
     });
-    modal.focus();
+    screen.render();
+  }
+
+  async function refreshState() {
+    state.daemon = await getDaemonStatus();
+    state.service = await getServiceStatus();
+    renderStatus();
+  }
+
+  async function toggleDaemonInside() {
+    if (state.daemon?.running) {
+      await stopDetachedDaemon();
+    } else {
+      await startDetachedDaemon();
+    }
+    await refreshState();
+  }
+
+  async function toggleServiceInside() {
+    if (!state.service?.installed) {
+      await installService();
+      await startService();
+    } else if (state.service.active) {
+      await stopService();
+    } else {
+      await startService();
+    }
+    await refreshState();
+  }
+
+  await refreshState();
+
+  return new Promise((resolve) => {
+    resolvePromise = resolve;
+    modal.key(["escape", "q"], () => close());
+    modal.key(["d"], () => {
+      void toggleDaemonInside();
+    });
+    modal.key(["i"], () => {
+      void toggleServiceInside();
+    });
+    footerButtons[2].focus();
     screen.render();
   });
 }
