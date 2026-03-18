@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeTask, toggleTask, shouldRunTask, markTaskResult } from "../src/tasks.js";
+import {
+  buildTaskFromCli,
+  normalizeTask,
+  toggleTask,
+  shouldRunTask,
+  markTaskResult
+} from "../src/tasks.js";
 
 test("normalizeTask creates a delay task with computed next run", () => {
   const task = normalizeTask(
@@ -131,4 +137,21 @@ test("markTaskResult can preserve schedule for manual immediate runs", () => {
   assert.equal(updated.enabled, true);
   assert.equal(updated.runtime.lastExitCode, 0);
   assert.equal(updated.runtime.nextRunAt, previousNextRun);
+});
+
+test("buildTaskFromCli falls back to the configured default provider", () => {
+  const task = buildTaskFromCli(
+    {
+      name: "Default Codex Job",
+      type: "once",
+      at: "2026-03-20 09:00",
+      prompt: "Inspect the workspace."
+    },
+    {
+      defaultProvider: "codex",
+      timezone: "UTC"
+    }
+  );
+
+  assert.equal(task.command.provider, "codex");
 });

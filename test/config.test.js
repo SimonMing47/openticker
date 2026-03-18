@@ -81,3 +81,48 @@ test("normalizeConfig rejects duplicate task ids", () => {
     /Duplicate task id: dup-task/
   );
 });
+
+test("normalizeConfig applies the default provider to tasks", () => {
+  const config = normalizeConfig({
+    settings: {
+      defaultProvider: "codex",
+      cliCommands: {
+        codex: "npx -y @openai/codex"
+      }
+    },
+    tasks: [
+      {
+        name: "Daily Codex Sweep",
+        type: "cron",
+        schedule: {
+          cron: "0 9 * * *",
+          timezone: "UTC"
+        },
+        command: {
+          prompt: "Review the repo."
+        }
+      }
+    ]
+  });
+
+  assert.equal(config.settings.defaultProvider, "codex");
+  assert.equal(config.settings.cliCommands.codex, "npx -y @openai/codex");
+  assert.equal(config.tasks[0].command.provider, "codex");
+});
+
+test("normalizeConfig supports legacy provider command keys", () => {
+  const config = normalizeConfig({
+    settings: {
+      opencodeCommand: "opencode-beta",
+      codexCommand: "npx -y @openai/codex",
+      claudeCommand: "npx -y @anthropic-ai/claude-code"
+    }
+  });
+
+  assert.equal(config.settings.cliCommands.opencode, "opencode-beta");
+  assert.equal(config.settings.cliCommands.codex, "npx -y @openai/codex");
+  assert.equal(
+    config.settings.cliCommands.claude,
+    "npx -y @anthropic-ai/claude-code"
+  );
+});

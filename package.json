@@ -1,7 +1,7 @@
 {
   "name": "openticker",
   "version": "0.1.0",
-  "description": "A geeky terminal scheduler for OpenCode recurring, one-shot, and delayed jobs.",
+  "description": "A geeky terminal scheduler for OpenCode, Codex, and Claude Code jobs.",
   "type": "module",
   "bin": {
     "openticker": "./bin/openticker.js"
@@ -28,6 +28,9 @@
   },
   "keywords": [
     "opencode",
+    "codex",
+    "claude-code",
+    "ai-cli",
     "scheduler",
     "tui",
     "cron",

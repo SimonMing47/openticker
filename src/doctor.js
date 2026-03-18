@@ -3,6 +3,11 @@ import { promisify } from "node:util";
 import { CONFIG_PATH } from "./constants.js";
 import { normalizeConfig, summarizeConfig } from "./config.js";
 import { fileExists, readJson } from "./fs.js";
+import {
+  providerCommand,
+  providerExecutable,
+  providerLabel
+} from "./providers.js";
 import { getDaemonStatus } from "./daemon.js";
 import { getServiceStatus } from "./service.js";
 
@@ -10,10 +15,12 @@ const execFileAsync = promisify(execFile);
 
 export async function runDoctor(options = {}) {
   const checks = [];
+  const configCheck = await checkConfig();
+  const config = configCheck.config;
 
   checks.push(await checkCommand("node", [process.execPath, "--version"]));
-  checks.push(await checkCommand("opencode", ["opencode", "--help"]));
-  checks.push(await checkConfig());
+  checks.push(...(await checkProviderCommands(config)));
+  checks.push(configCheck);
 
   const daemon = await getDaemonStatus();
   checks.push({
@@ -32,7 +39,9 @@ export async function runDoctor(options = {}) {
   });
 
   if (options.strict) {
-    const failed = checks.filter((check) => !check.ok && !["daemon", "service", "config"].includes(check.name));
+    const failed = checks.filter(
+      (check) => !check.ok && check.required !== false && !["daemon", "service", "config"].includes(check.name)
+    );
     if (failed.length > 0) {
       const names = failed.map((check) => check.name).join(", ");
       throw new Error(`Doctor checks failed: ${names}`);
@@ -81,7 +90,10 @@ async function checkConfig() {
     return {
       name: "config",
       ok: true,
-      details: `${CONFIG_PATH} (${summary.totalTasks} tasks, ${summary.enabledTasks} enabled)`
+      details:
+        `${CONFIG_PATH} (${summary.totalTasks} tasks, ${summary.enabledTasks} enabled, ` +
+        `providers: ${summary.providers.join(", ") || "none"})`,
+      config
     };
   } catch (error) {
     return {
@@ -90,4 +102,35 @@ async function checkConfig() {
       details: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function checkProviderCommands(config) {
+  const checks = [];
+  const settings = config?.settings || {
+    defaultProvider: "opencode",
+    cliCommands: {
+      opencode: "opencode",
+      codex: "codex",
+      claude: "claude"
+    }
+  };
+  const requiredProviders = new Set([settings.defaultProvider || "opencode"]);
+
+  for (const task of config?.tasks || []) {
+    requiredProviders.add(task.command?.provider || settings.defaultProvider || "opencode");
+  }
+
+  for (const provider of ["opencode", "codex", "claude"]) {
+    const command = providerCommand(settings, provider);
+    const executable = providerExecutable(settings, provider);
+    const check = await checkCommand(
+      `cli:${provider}`,
+      [executable.command, ...executable.args, "--help"]
+    );
+    check.required = requiredProviders.has(provider);
+    check.details = `${providerLabel(provider)} -> ${command}; ${check.details}`;
+    checks.push(check);
+  }
+
+  return checks;
 }

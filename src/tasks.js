@@ -1,4 +1,5 @@
 import { DEFAULT_TIMEZONE } from "./constants.js";
+import { normalizeProvider } from "./providers.js";
 import { createId, nowIso, resolveWorkdir, splitArgs } from "./utils.js";
 import { fromDelay, parseCronNext, parseDateInput } from "./time.js";
 
@@ -33,6 +34,10 @@ export function normalizeTask(input, defaults = {}, options = {}) {
     type,
     schedule: {},
     command: {
+      provider: normalizeProvider(
+        input.command?.provider,
+        defaults.defaultProvider || "opencode"
+      ),
       mode: input.command?.mode || "prompt",
       prompt: input.command?.prompt?.trim() || "",
       workdir: resolveWorkdir(input.command?.workdir || defaults.workdir),
@@ -207,6 +212,7 @@ export function buildTaskFromCli(options, defaults = {}) {
     schedule: {},
     command: {
       mode: options.commandName ? "command" : "prompt",
+      provider: options.provider || defaults.defaultProvider || "opencode",
       prompt: options.prompt || "",
       workdir: options.workdir,
       attachStrategy: options.attach || "inherit",

@@ -16,6 +16,7 @@ import {
   updateTask
 } from "./store.js";
 import { normalizeConfig, summarizeConfig } from "./config.js";
+import { providerLabel } from "./providers.js";
 import { runTask } from "./runner.js";
 import {
   getDaemonStatus,
@@ -39,7 +40,7 @@ export async function runCli(argv = process.argv) {
   const program = new Command();
   program
     .name("openticker")
-    .description("Schedule recurring, one-shot, and delayed OpenCode jobs.")
+    .description("Schedule recurring, one-shot, and delayed AI CLI jobs.")
     .showHelpAfterError();
 
   program
@@ -56,7 +57,7 @@ export async function runCli(argv = process.argv) {
       const config = await loadConfig();
       for (const task of config.tasks) {
         process.stdout.write(
-          `${taskToLine(task)} | next=${task.runtime.nextRunAt || "n/a"} | ${humanizeSchedule(task)}\n`
+          `${taskToLine(task)} | cli=${providerLabel(task.command.provider)} | next=${task.runtime.nextRunAt || "n/a"} | ${humanizeSchedule(task)}\n`
         );
       }
     });
@@ -83,17 +84,18 @@ export async function runCli(argv = process.argv) {
     .option("--timezone <timezone>", "IANA timezone")
     .option("--at <date>", "one-shot datetime, e.g. 2026-03-18T10:00")
     .option("--delay <delay>", "delay, e.g. 30m or 2h")
-    .option("--prompt <prompt>", "prompt text for opencode")
-    .option("--command-name <name>", "OpenCode command name")
+    .option("--prompt <prompt>", "prompt text for the selected CLI")
+    .option("--provider <provider>", "opencode | codex | claude")
+    .option("--command-name <name>", "OpenCode command name (OpenCode only)")
     .option("--workdir <path>", "working directory")
-    .option("--model <model>", "OpenCode model")
-    .option("--agent <agent>", "OpenCode agent")
-    .option("--title <title>", "OpenCode session title")
-    .option("--attach <mode>", "inherit | always | never", "inherit")
+    .option("--model <model>", "model name for the selected CLI")
+    .option("--agent <agent>", "agent name (OpenCode / Claude Code)")
+    .option("--title <title>", "session title / name")
+    .option("--attach <mode>", "inherit | always | never (OpenCode only)", "inherit")
     .option("--format <format>", "pretty | json", "pretty")
-    .option("--session <id>", "OpenCode session id")
-    .option("--continue-last", "continue the last OpenCode session")
-    .option("--extra-args <value...>", "extra raw args passed to opencode run")
+    .option("--session <id>", "OpenCode session id (OpenCode only)")
+    .option("--continue-last", "continue the last OpenCode session (OpenCode only)")
+    .option("--extra-args <value...>", "extra raw args passed to the selected CLI")
     .option("--disabled", "create the task disabled")
     .action(async (options) => {
       const config = await loadConfig();
@@ -141,7 +143,9 @@ export async function runCli(argv = process.argv) {
         throw new Error(`Task not found: ${taskId}`);
       }
       const result = await runTask(task, config.settings);
-      await updateTask(taskId, (currentTask) => markTaskResult(currentTask, result));
+      await updateTask(taskId, (currentTask) =>
+        markTaskResult(currentTask, result, { consumeSchedule: false })
+      );
       process.stdout.write(
         `Run finished exit=${result.exitCode} duration=${formatDuration(result.durationMs)} log=${result.logFile}\n`
       );
@@ -226,7 +230,7 @@ export async function runCli(argv = process.argv) {
 
   program
     .command("doctor")
-    .description("Check Node, OpenCode, config, daemon, and service status")
+    .description("Check Node, configured AI CLI commands, config, daemon, and service status")
     .option("--strict", "fail if required dependencies are missing")
     .action(async (options) => {
       const checks = await runDoctor(options);

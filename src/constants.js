@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { DEFAULT_CLI_COMMANDS } from "./providers.js";
 
 const home = os.homedir();
 const xdgConfigHome = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
@@ -25,7 +26,10 @@ export const DEFAULT_CONFIG = {
   version: 1,
   settings: {
     timezone: DEFAULT_TIMEZONE,
-    opencodeCommand: "opencode",
+    defaultProvider: "opencode",
+    cliCommands: {
+      ...DEFAULT_CLI_COMMANDS
+    },
     attachUrl: DEFAULT_ATTACH_URL,
     autoAttach: true,
     autoStartDaemon: false,
@@ -37,13 +41,14 @@ export const DEFAULT_CONFIG = {
       id: "sample-hourly-keepalive",
       name: "每小时心跳",
       description:
-        "一个示例循环任务，用来保持 OpenCode 处于温热状态并定期总结工作区。",
+        "一个示例循环任务，用来保持默认 AI CLI 处于温热状态并定期总结工作区。",
       type: "cron",
       schedule: {
         cron: "0 * * * *",
         timezone: DEFAULT_TIMEZONE
       },
       command: {
+        provider: "opencode",
         mode: "prompt",
         prompt:
           "检查当前工作区，简短总结最近变化、潜在风险和下一步建议，保持输出精炼。",

@@ -2,7 +2,12 @@
   "version": 1,
   "settings": {
     "timezone": "Asia/Shanghai",
-    "opencodeCommand": "opencode",
+    "defaultProvider": "opencode",
+    "cliCommands": {
+      "opencode": "opencode",
+      "codex": "codex",
+      "claude": "claude"
+    },
     "attachUrl": "http://127.0.0.1:4096",
     "autoAttach": true,
     "autoStartDaemon": false,
@@ -12,7 +17,7 @@
   "tasks": [
     {
       "name": "Hourly Heartbeat",
-      "description": "Keep an OpenCode backend warm and collect a short workspace summary.",
+      "description": "Keep the default OpenCode session warm and collect a short workspace summary.",
       "type": "cron",
       "enabled": true,
       "schedule": {
@@ -20,6 +25,7 @@
         "timezone": "Asia/Shanghai"
       },
       "command": {
+        "provider": "opencode",
         "mode": "prompt",
         "prompt": "Inspect the current workspace, summarize recent changes, and exit.",
         "workdir": "/path/to/project",
@@ -33,14 +39,15 @@
       }
     },
     {
-      "name": "Single Release Gate",
-      "description": "One-shot execution for a release day check.",
+      "name": "Codex Release Gate",
+      "description": "One-shot execution for a release day check via Codex.",
       "type": "once",
       "enabled": true,
       "schedule": {
         "at": "2026-03-20T09:00:00+08:00"
       },
       "command": {
+        "provider": "codex",
         "mode": "prompt",
         "prompt": "Run a release readiness check and summarize blockers.",
         "workdir": "/path/to/project",
@@ -54,14 +61,15 @@
       }
     },
     {
-      "name": "Delayed Follow-up",
-      "description": "Run once after a short delay.",
+      "name": "Claude Follow-up",
+      "description": "Run once after a short delay via Claude Code.",
       "type": "delay",
       "enabled": true,
       "schedule": {
         "delayText": "45m"
       },
       "command": {
+        "provider": "claude",
         "mode": "prompt",
         "prompt": "Check the workspace again and report what changed after the waiting period.",
         "workdir": "/path/to/project",

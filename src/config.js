@@ -1,4 +1,9 @@
 import { DEFAULT_CONFIG } from "./constants.js";
+import {
+  DEFAULT_CLI_COMMANDS,
+  SUPPORTED_PROVIDERS,
+  normalizeProvider
+} from "./providers.js";
 import { normalizeTask } from "./tasks.js";
 import { nowIso } from "./utils.js";
 
@@ -33,17 +38,39 @@ export function normalizeConfig(raw = {}, options = {}) {
 }
 
 export function summarizeConfig(config) {
+  const providers = new Set(
+    config.tasks.map((task) => task.command.provider || config.settings.defaultProvider)
+  );
   return {
     totalTasks: config.tasks.length,
-    enabledTasks: config.tasks.filter((task) => task.enabled).length
+    enabledTasks: config.tasks.filter((task) => task.enabled).length,
+    providers: [...providers]
   };
 }
 
 function normalizeSettings(raw) {
   const defaults = DEFAULT_CONFIG.settings;
+  const cliCommands = {
+    ...DEFAULT_CLI_COMMANDS,
+    ...(raw.cliCommands || {})
+  };
+
+  if (raw.opencodeCommand) {
+    cliCommands.opencode = String(raw.opencodeCommand);
+  }
+  if (raw.codexCommand) {
+    cliCommands.codex = String(raw.codexCommand);
+  }
+  if (raw.claudeCommand) {
+    cliCommands.claude = String(raw.claudeCommand);
+  }
+
   const settings = {
     timezone: String(raw.timezone || defaults.timezone),
-    opencodeCommand: String(raw.opencodeCommand || defaults.opencodeCommand),
+    defaultProvider: normalizeProvider(
+      raw.defaultProvider || defaults.defaultProvider
+    ),
+    cliCommands,
     attachUrl: String(raw.attachUrl || defaults.attachUrl),
     autoAttach:
       raw.autoAttach === undefined ? defaults.autoAttach : Boolean(raw.autoAttach),
@@ -71,8 +98,10 @@ function normalizeSettings(raw) {
     );
   }
 
-  if (!settings.opencodeCommand.trim()) {
-    throw new Error("opencodeCommand must not be empty");
+  for (const provider of SUPPORTED_PROVIDERS) {
+    if (!String(settings.cliCommands[provider] || "").trim()) {
+      throw new Error(`CLI command for ${provider} must not be empty`);
+    }
   }
 
   return settings;

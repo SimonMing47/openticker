@@ -9,6 +9,7 @@ import {
   startService,
   stopService
 } from "./service.js";
+import { providerHelp, providerLabel } from "./providers.js";
 import { markTaskResult, normalizeTask, toggleTask } from "./tasks.js";
 import { runTask } from "./runner.js";
 import {
@@ -43,6 +44,7 @@ const tagColors = {
 };
 
 const taskTypes = ["cron", "once", "delay"];
+const cliProviders = ["opencode", "codex", "claude"];
 const attachStrategies = ["inherit", "always", "never"];
 const presetIds = ["heartbeat", "daily", "once", "delay"];
 
@@ -820,6 +822,7 @@ function buildFormState(existingTask, settings, options = {}) {
       templateId: "custom",
       name: existingTask.name,
       description: existingTask.description || "",
+      provider: existingTask.command.provider || settings.defaultProvider || "opencode",
       type: existingTask.type,
       scheduleValue: scheduleValueFromTask(existingTask),
       prompt: existingTask.command.prompt || "",
@@ -841,6 +844,7 @@ function buildFormState(existingTask, settings, options = {}) {
   return applyPreset(
     {
       templateId: initialPresetId,
+      provider: settings.defaultProvider || "opencode",
       advanced: false
     },
     initialPresetId,
@@ -860,6 +864,15 @@ function buildFormRows(formState, options = {}) {
         const nextId = cycleValue(state.templateId, presetIds);
         const nextState = applyPreset(state, nextId, {});
         Object.assign(state, nextState);
+      }
+    }),
+    cycleRow({
+      key: "provider",
+      label: "触发 CLI",
+      read: (state) => providerLabel(state.provider),
+      description: providerHelp(formState.provider),
+      apply: (state) => {
+        state.provider = cycleValue(state.provider, cliProviders);
       }
     }),
     textRow({
@@ -900,12 +913,12 @@ function buildFormRows(formState, options = {}) {
       write: (state, value) => {
         state.workdir = resolveWorkdir(value);
       },
-      description: "OpenCode 执行时所在目录。默认就是当前仓库。"
+      description: "所选 CLI 执行时所在目录。默认就是当前仓库。"
     }),
     textareaRow({
       key: "prompt",
       label: "提示词",
-      placeholder: "描述要让 OpenCode 做什么",
+      placeholder: "描述要让 AI CLI 做什么",
       read: (state) => state.prompt,
       write: (state, value) => {
         state.prompt = value;
@@ -937,65 +950,116 @@ function buildFormRows(formState, options = {}) {
     return rows;
   }
 
+  if (formState.provider === "opencode") {
+    rows.push(
+      cycleRow({
+        key: "attachStrategy",
+        label: "附着策略",
+        read: (state) => formatAttachStrategy(state.attachStrategy),
+        description: "默认跟随全局；总是附着适合配合 `opencode serve`。",
+        apply: (state) => {
+          state.attachStrategy = cycleValue(state.attachStrategy, attachStrategies);
+        }
+      }),
+      textRow({
+        key: "commandName",
+        label: "命令名",
+        placeholder: "留空则走 prompt 模式",
+        read: (state) => state.commandName,
+        write: (state, value) => {
+          state.commandName = value;
+        },
+        description: "OpenCode 命令别名。留空时直接执行 prompt。"
+      }),
+      textRow({
+        key: "model",
+        label: "模型",
+        placeholder: "可留空",
+        read: (state) => state.model,
+        write: (state, value) => {
+          state.model = value;
+        },
+        description: "需要固定模型时再填。"
+      }),
+      textRow({
+        key: "agent",
+        label: "Agent",
+        placeholder: "可留空",
+        read: (state) => state.agent,
+        write: (state, value) => {
+          state.agent = value;
+        },
+        description: "OpenCode 的 agent 名称。"
+      }),
+      textRow({
+        key: "title",
+        label: "会话标题",
+        placeholder: "可留空",
+        read: (state) => state.title,
+        write: (state, value) => {
+          state.title = value;
+        },
+        description: "便于之后在 OpenCode 会话里区分用途。"
+      })
+    );
+  } else if (formState.provider === "claude") {
+    rows.push(
+      textRow({
+        key: "model",
+        label: "模型",
+        placeholder: "例如：sonnet",
+        read: (state) => state.model,
+        write: (state, value) => {
+          state.model = value;
+        },
+        description: "Claude Code 支持 `--model`。"
+      }),
+      textRow({
+        key: "agent",
+        label: "Agent",
+        placeholder: "可留空",
+        read: (state) => state.agent,
+        write: (state, value) => {
+          state.agent = value;
+        },
+        description: "Claude Code 支持 `--agent`。"
+      }),
+      textRow({
+        key: "title",
+        label: "会话标题",
+        placeholder: "可留空",
+        read: (state) => state.title,
+        write: (state, value) => {
+          state.title = value;
+        },
+        description: "Claude Code 会映射到 `--name`。"
+      })
+    );
+  } else {
+    rows.push(
+      textRow({
+        key: "model",
+        label: "模型",
+        placeholder: "例如：o3",
+        read: (state) => state.model,
+        write: (state, value) => {
+          state.model = value;
+        },
+        description: "Codex CLI 支持 `codex exec --model`。"
+      })
+    );
+  }
+
   rows.push(
-    cycleRow({
-      key: "attachStrategy",
-      label: "附着策略",
-      read: (state) => formatAttachStrategy(state.attachStrategy),
-      description: "默认跟随全局；总是附着适合配合 `opencode serve`。",
-      apply: (state) => {
-        state.attachStrategy = cycleValue(state.attachStrategy, attachStrategies);
-      }
-    }),
-    textRow({
-      key: "commandName",
-      label: "命令名",
-      placeholder: "留空则走 prompt 模式",
-      read: (state) => state.commandName,
-      write: (state, value) => {
-        state.commandName = value;
-      },
-      description: "如果你在 OpenCode 配过命令别名，可以在这里填。"
-    }),
-    textRow({
-      key: "model",
-      label: "模型",
-      placeholder: "可留空",
-      read: (state) => state.model,
-      write: (state, value) => {
-        state.model = value;
-      },
-      description: "需要固定模型时再填。"
-    }),
-    textRow({
-      key: "agent",
-      label: "Agent",
-      placeholder: "可留空",
-      read: (state) => state.agent,
-      write: (state, value) => {
-        state.agent = value;
-      },
-      description: "OpenCode 的 agent 名称。"
-    }),
-    textRow({
-      key: "title",
-      label: "会话标题",
-      placeholder: "可留空",
-      read: (state) => state.title,
-      write: (state, value) => {
-        state.title = value;
-      },
-      description: "便于之后在 OpenCode 会话里区分用途。"
-    }),
     textRow({
       key: "extraArgs",
       label: "额外参数",
-      placeholder: "--format json",
+      placeholder: "--output-format json",
       read: (state) => state.extraArgs,
       write: (state, value) => {
         state.extraArgs = value;
       },
-      description: "原样附加到 `opencode run` 后面。"
+      description: "原样附加到所选 CLI。"
     }),
     textRow({
       key: "description",
@@ -1034,6 +1098,7 @@ function formStateToTaskInput(formState, existingTask, settings) {
     schedule: {},
     command: {
       mode: formState.commandName ? "command" : "prompt",
+      provider: formState.provider,
       prompt: formState.prompt,
       workdir: resolveWorkdir(formState.workdir || process.cwd()),
       attachStrategy: formState.attachStrategy || "inherit",
@@ -1074,7 +1139,7 @@ function renderHeader(state) {
     : "--:--:--";
 
   return [
-    `{bold}{${tagColors.border}-fg}OPEN{/}{${tagColors.accent}-fg}TICKER{/}{/bold} {${tagColors.dim}-fg}// OpenCode 定时控制台{/}`,
+    `{bold}{${tagColors.border}-fg}OPEN{/}{${tagColors.accent}-fg}TICKER{/}{/bold} {${tagColors.dim}-fg}// AI CLI 定时控制台{/}`,
     `{${tagColors.dim}-fg}赛博调度台{/}  {${tagColors.text}-fg}任务 ${enabled}/${total}{/}  ${daemonLine}  ${serviceLine}  {${tagColors.dim}-fg}刷新 ${refreshed}{/}`
   ].join("\n");
 }
@@ -1098,6 +1163,7 @@ function renderTaskSummary(task) {
     `${task.description || "没有补充说明"}`,
     "",
     `${infoLabel("状态")} ${task.enabled ? "已启用" : "已停用"}`,
+    `${infoLabel("CLI")} ${providerLabel(task.command.provider)}`,
     `${infoLabel("类型")} ${formatTaskType(task.type)}`,
     `${infoLabel("规则")} ${humanizeSchedule(task)}`,
     `${infoLabel("下次")} ${task.runtime.nextRunAt ? `${formatDateTime(task.runtime.nextRunAt)} / ${relativeToNow(task.runtime.nextRunAt)}` : "暂无"}`,
@@ -1136,6 +1202,7 @@ function renderPromptPanel(task) {
   const prompt = task.command.prompt?.trim() || "未填写提示词";
 
   return [
+    `${infoLabel("触发 CLI")} ${providerLabel(task.command.provider)}`,
     `${infoLabel("执行模式")} ${mode}`,
     "",
     prompt
@@ -1166,13 +1233,14 @@ function formatTaskListItem(task) {
   const dot = task.enabled
     ? `{${tagColors.success}-fg}●{/}`
     : `{${tagColors.dim}-fg}○{/}`;
-  const name = truncate(task.name, 18);
+  const name = truncate(task.name, 14);
   const type = truncate(formatTaskType(task.type), 4);
+  const provider = truncate(providerLabel(task.command.provider), 7);
   const next = truncate(
     task.runtime.nextRunAt ? relativeToNow(task.runtime.nextRunAt) : "未启用",
-    14
+    10
   );
-  return `${dot} ${name}  {${tagColors.dim}-fg}${type}{/}  {${tagColors.dim}-fg}${next}{/}`;
+  return `${dot} ${name}  {${tagColors.dim}-fg}${type}/${provider}{/}  {${tagColors.dim}-fg}${next}{/}`;
 }
 
 function renderFormPreview(formState, row) {
@@ -1181,6 +1249,7 @@ function renderFormPreview(formState, row) {
     `${formState.description || "暂无任务说明"}`,
     "",
     `${infoLabel("模板")} ${presetLabel(formState.templateId)}`,
+    `${infoLabel("CLI")} ${providerLabel(formState.provider)}`,
     `${infoLabel("类型")} ${formatTaskType(formState.type)}`,
     `${infoLabel("规则")} ${formState.scheduleValue}`,
     `${infoLabel("目录")} ${formState.workdir}`,
@@ -1572,12 +1641,14 @@ async function showText(screen, title, content) {
 function buildPresetInput(presetId, settings = {}) {
   const timezone =
     settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const provider = settings.defaultProvider || "opencode";
   const workdir = process.cwd();
 
   if (presetId === "daily") {
     return {
       name: "每日巡检",
       description: "每天自动扫描仓库变化并给出处理建议。",
+      provider,
       type: "cron",
       scheduleValue: "30 9 * * *",
       prompt:
@@ -1598,6 +1669,7 @@ function buildPresetInput(presetId, settings = {}) {
     return {
       name: "一次性检查",
       description: "在固定时间执行一次任务。",
+      provider,
       type: "once",
       scheduleValue: dayjs().add(1, "hour").format("YYYY-MM-DD HH:mm"),
       prompt:
@@ -1618,6 +1690,7 @@ function buildPresetInput(presetId, settings = {}) {
     return {
       name: "延时跟进",
       description: "延迟一段时间后自动再检查一次。",
+      provider,
       type: "delay",
       scheduleValue: "30m",
       prompt:
@@ -1636,7 +1709,8 @@ function buildPresetInput(presetId, settings = {}) {
 
   return {
     name: "每小时心跳",
-    description: "保持 OpenCode 温热，并定期总结工作区状态。",
+    description: "保持默认 AI CLI 温热，并定期总结工作区状态。",
+    provider,
     type: "cron",
     scheduleValue: "0 * * * *",
     prompt:
@@ -1658,6 +1732,7 @@ function applyPreset(formState, presetId, settings = {}) {
   return {
     ...formState,
     templateId: presetId,
+    provider: formState.provider || preset.provider,
     name: preset.name,
     description: preset.description,
     type: preset.type,
