@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "settings": {
+    "timezone": "Asia/Shanghai",
+    "opencodeCommand": "opencode",
+    "attachUrl": "http://127.0.0.1:4096",
+    "autoAttach": true,
+    "autoStartDaemon": false,
+    "outputMode": "pretty",
+    "maxConcurrentRuns": 1
+  },
+  "tasks": [
+    {
+      "name": "Hourly Heartbeat",
+      "description": "Keep an OpenCode backend warm and collect a short workspace summary.",
+      "type": "cron",
+      "enabled": true,
+      "schedule": {
+        "cron": "0 * * * *",
+        "timezone": "Asia/Shanghai"
+      },
+      "command": {
+        "mode": "prompt",
+        "prompt": "Inspect the current workspace, summarize recent changes, and exit.",
+        "workdir": "/path/to/project",
+        "attachStrategy": "always",
+        "extraArgs": [],
+        "model": "",
+        "agent": "",
+        "title": "Hourly Heartbeat",
+        "format": "pretty",
+        "commandName": ""
+      }
+    },
+    {
+      "name": "Single Release Gate",
+      "description": "One-shot execution for a release day check.",
+      "type": "once",
+      "enabled": true,
+      "schedule": {
+        "at": "2026-03-20T09:00:00+08:00"
+      },
+      "command": {
+        "mode": "prompt",
+        "prompt": "Run a release readiness check and summarize blockers.",
+        "workdir": "/path/to/project",
+        "attachStrategy": "inherit",
+        "extraArgs": [],
+        "model": "",
+        "agent": "",
+        "title": "Release Gate",
+        "format": "pretty",
+        "commandName": ""
+      }
+    },
+    {
+      "name": "Delayed Follow-up",
+      "description": "Run once after a short delay.",
+      "type": "delay",
+      "enabled": true,
+      "schedule": {
+        "delayText": "45m"
+      },
+      "command": {
+        "mode": "prompt",
+        "prompt": "Check the workspace again and report what changed after the waiting period.",
+        "workdir": "/path/to/project",
+        "attachStrategy": "inherit",
+        "extraArgs": [],
+        "model": "",
+        "agent": "",
+        "title": "Delayed Follow-up",
+        "format": "pretty",
+        "commandName": ""
+      }
+    }
+  ]
+}

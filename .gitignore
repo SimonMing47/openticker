@@ -1,0 +1,6 @@
+node_modules
+.tooling
+.DS_Store
+coverage
+*.log
+tmp

@@ -1,0 +1,46 @@
+{
+  "name": "openticker",
+  "version": "0.1.0",
+  "description": "A geeky terminal scheduler for OpenCode recurring, one-shot, and delayed jobs.",
+  "type": "module",
+  "bin": {
+    "openticker": "./bin/openticker.js"
+  },
+  "main": "./src/cli.js",
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "examples",
+    "CONTRIBUTING.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "node ./bin/openticker.js tui",
+    "dev": "node ./bin/openticker.js tui",
+    "doctor": "node ./bin/openticker.js doctor",
+    "test": "node --test",
+    "lint": "node --test"
+  },
+  "keywords": [
+    "opencode",
+    "scheduler",
+    "tui",
+    "cron",
+    "terminal",
+    "automation"
+  ],
+  "author": "Sigmund <mingxing.tc@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "commander": "^14.0.2",
+    "cron-parser": "^5.4.0",
+    "dayjs": "^1.11.13",
+    "parse-duration": "^2.1.3"
+  }
+}
