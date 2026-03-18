@@ -149,7 +149,8 @@ export function shouldRunTask(task, currentDate = new Date()) {
   return new Date(nextRun).getTime() <= currentDate.getTime();
 }
 
-export function markTaskResult(task, result) {
+export function markTaskResult(task, result, options = {}) {
+  const { consumeSchedule = true } = options;
   const updated = structuredClone(task);
   updated.updatedAt = nowIso();
   updated.runtime = {
@@ -163,6 +164,13 @@ export function markTaskResult(task, result) {
     lastLogFile: result.logFile,
     lastOutputPreview: result.outputPreview || null
   };
+
+  if (!consumeSchedule) {
+    updated.runtime.nextRunAt = updated.enabled
+      ? calculateNextRun(updated)?.toISOString() || updated.runtime.nextRunAt
+      : null;
+    return updated;
+  }
 
   if (updated.type === "cron" && updated.enabled) {
     updated.runtime.nextRunAt = calculateNextRun(

@@ -95,3 +95,40 @@ test("markTaskResult disables one-shot tasks after execution", () => {
   assert.equal(updated.runtime.nextRunAt, null);
   assert.equal(updated.runtime.lastExitCode, 0);
 });
+
+test("markTaskResult can preserve schedule for manual immediate runs", () => {
+  const task = normalizeTask(
+    {
+      name: "Delayed follow-up",
+      type: "delay",
+      schedule: {
+        delayText: "30m"
+      },
+      command: {
+        prompt: "hello"
+      }
+    },
+    {}
+  );
+
+  const previousNextRun = task.runtime.nextRunAt;
+  const updated = markTaskResult(
+    task,
+    {
+      startedAt: "2026-03-18T02:00:00.000Z",
+      finishedAt: "2026-03-18T02:00:10.000Z",
+      durationMs: 10000,
+      exitCode: 0,
+      error: null,
+      logFile: "/tmp/test.log",
+      outputPreview: "ok"
+    },
+    {
+      consumeSchedule: false
+    }
+  );
+
+  assert.equal(updated.enabled, true);
+  assert.equal(updated.runtime.lastExitCode, 0);
+  assert.equal(updated.runtime.nextRunAt, previousNextRun);
+});

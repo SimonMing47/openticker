@@ -35,9 +35,9 @@ export const DEFAULT_CONFIG = {
   tasks: [
     {
       id: "sample-hourly-keepalive",
-      name: "Hourly Keepalive",
+      name: "每小时心跳",
       description:
-        "A sample recurring task that keeps an OpenCode backend warm and ready.",
+        "一个示例循环任务，用来保持 OpenCode 处于温热状态并定期总结工作区。",
       type: "cron",
       schedule: {
         cron: "0 * * * *",
@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG = {
       command: {
         mode: "prompt",
         prompt:
-          "Inspect the current workspace, summarize changes since the last run, and exit with a concise note.",
+          "检查当前工作区，简短总结最近变化、潜在风险和下一步建议，保持输出精炼。",
         workdir: process.cwd(),
         attachStrategy: "always",
         extraArgs: [],
