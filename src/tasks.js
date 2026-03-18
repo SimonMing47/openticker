@@ -2,6 +2,10 @@ import { DEFAULT_TIMEZONE } from "./constants.js";
 import { createId, nowIso, resolveWorkdir, splitArgs } from "./utils.js";
 import { fromDelay, parseCronNext, parseDateInput } from "./time.js";
 
+const ATTACH_STRATEGIES = new Set(["inherit", "always", "never"]);
+const OUTPUT_FORMATS = new Set(["pretty", "json"]);
+const OVERLAP_POLICIES = new Set(["skip"]);
+
 function defaultRuntime() {
   return {
     runCount: 0,
@@ -15,9 +19,12 @@ function defaultRuntime() {
   };
 }
 
-export function normalizeTask(input, defaults = {}) {
-  const createdAt = input.createdAt || nowIso();
-  const updatedAt = nowIso();
+export function normalizeTask(input, defaults = {}, options = {}) {
+  const { preserveRuntime = false, preserveUpdatedAt = false } = options;
+  const timestamp = nowIso();
+  const createdAt = input.createdAt || timestamp;
+  const updatedAt =
+    preserveUpdatedAt && input.updatedAt ? input.updatedAt : timestamp;
   const type = input.type;
   const task = {
     id: input.id || createId(type || "task"),
@@ -45,12 +52,23 @@ export function normalizeTask(input, defaults = {}) {
     updatedAt,
     runtime: {
       ...defaultRuntime(),
-      ...(input.runtime || {})
+      ...(preserveRuntime ? input.runtime || {} : {})
     }
   };
 
   if (!task.name) {
     throw new Error("Task name is required");
+  }
+  if (!ATTACH_STRATEGIES.has(task.command.attachStrategy)) {
+    throw new Error(
+      `Unsupported attach strategy: ${task.command.attachStrategy}`
+    );
+  }
+  if (!OUTPUT_FORMATS.has(task.command.format)) {
+    throw new Error(`Unsupported task format: ${task.command.format}`);
+  }
+  if (!OVERLAP_POLICIES.has(task.overlapPolicy)) {
+    throw new Error(`Unsupported overlap policy: ${task.overlapPolicy}`);
   }
 
   if (type === "cron") {
@@ -96,7 +114,7 @@ export function normalizeTask(input, defaults = {}) {
     throw new Error("Prompt or command name is required");
   }
 
-  task.runtime.nextRunAt = calculateNextRun(task)?.toISOString() || null;
+  task.runtime.nextRunAt = resolveNextRun(task, preserveRuntime);
   return task;
 }
 
@@ -226,4 +244,27 @@ function normalizeArgs(rawArgs) {
     return splitArgs(rawArgs);
   }
   return [];
+}
+
+function resolveNextRun(task, preserveRuntime) {
+  if (!task.enabled) {
+    return null;
+  }
+
+  const computedNextRun = calculateNextRun(task)?.toISOString() || null;
+  if (!preserveRuntime) {
+    return computedNextRun;
+  }
+
+  const existingNextRun = task.runtime?.nextRunAt;
+  if (!existingNextRun) {
+    return computedNextRun;
+  }
+
+  const parsedExistingNextRun = new Date(existingNextRun);
+  if (Number.isNaN(parsedExistingNextRun.getTime())) {
+    return computedNextRun;
+  }
+
+  return parsedExistingNextRun.toISOString();
 }

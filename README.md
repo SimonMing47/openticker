@@ -11,6 +11,8 @@ OpenTicker 是一个给 OpenCode 用的终端计划任务管家。它补的是 O
 - macOS `launchd` / Linux `systemd --user` service 安装
 - 调用 `opencode run` 执行任务，兼容 `--attach`
 - 日志持久化、导入导出、`doctor` 健康检查
+- 保留任务的下一次触发时间，daemon 重启后不会跳过已到期的 cron 任务
+- 导入时自动校验配置结构、任务 ID 唯一性和调度参数
 
 ## 为什么做这个项目
 
@@ -74,6 +76,8 @@ openticker tui
 ```bash
 openticker doctor
 ```
+
+`doctor` 会同时校验配置文件是否可解析、任务是否有效，以及当前任务数/启用数。
 
 ### 4. 启动后台调度
 
@@ -161,6 +165,8 @@ openticker export openticker.config.json
 ```bash
 openticker import ./examples/tasks.sample.json
 ```
+
+导入会先做结构校验和规范化，再写入正式配置文件。
 
 ## 开发
 

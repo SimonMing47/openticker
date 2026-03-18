@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { CONFIG_PATH } from "./constants.js";
-import { fileExists } from "./fs.js";
+import { normalizeConfig, summarizeConfig } from "./config.js";
+import { fileExists, readJson } from "./fs.js";
 import { getDaemonStatus } from "./daemon.js";
 import { getServiceStatus } from "./service.js";
 
@@ -12,11 +13,7 @@ export async function runDoctor(options = {}) {
 
   checks.push(await checkCommand("node", [process.execPath, "--version"]));
   checks.push(await checkCommand("opencode", ["opencode", "--help"]));
-  checks.push({
-    name: "config",
-    ok: await fileExists(CONFIG_PATH),
-    details: CONFIG_PATH
-  });
+  checks.push(await checkConfig());
 
   const daemon = await getDaemonStatus();
   checks.push({
@@ -59,6 +56,38 @@ async function checkCommand(name, command) {
       name,
       ok: false,
       details: error.code === "ENOENT" ? "not found" : error.message
+    };
+  }
+}
+
+async function checkConfig() {
+  const exists = await fileExists(CONFIG_PATH);
+  if (!exists) {
+    return {
+      name: "config",
+      ok: false,
+      details: `missing ${CONFIG_PATH}`
+    };
+  }
+
+  try {
+    const raw = await readJson(CONFIG_PATH);
+    const config = normalizeConfig(raw, {
+      preserveConfigUpdatedAt: true,
+      preserveTaskState: true,
+      preserveTaskUpdatedAt: true
+    });
+    const summary = summarizeConfig(config);
+    return {
+      name: "config",
+      ok: true,
+      details: `${CONFIG_PATH} (${summary.totalTasks} tasks, ${summary.enabledTasks} enabled)`
+    };
+  } catch (error) {
+    return {
+      name: "config",
+      ok: false,
+      details: error instanceof Error ? error.message : String(error)
     };
   }
 }

@@ -15,6 +15,7 @@ import {
   saveConfig,
   updateTask
 } from "./store.js";
+import { normalizeConfig, summarizeConfig } from "./config.js";
 import { runTask } from "./runner.js";
 import {
   getDaemonStatus,
@@ -258,8 +259,16 @@ export async function runCli(argv = process.argv) {
     .action(async (file) => {
       const raw = await fs.readFile(file, "utf8");
       const value = JSON.parse(raw);
-      await saveConfig(value);
-      process.stdout.write(`Imported ${file}\n`);
+      const config = normalizeConfig(value, {
+        preserveConfigUpdatedAt: true,
+        preserveTaskState: true,
+        preserveTaskUpdatedAt: true
+      });
+      await saveConfig(config);
+      const summary = summarizeConfig(config);
+      process.stdout.write(
+        `Imported ${file} (${summary.totalTasks} tasks, ${summary.enabledTasks} enabled)\n`
+      );
     });
 
   if (argv.length <= 2) {

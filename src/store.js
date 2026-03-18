@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { CONFIG_PATH, DEFAULT_CONFIG, LOG_DIR } from "./constants.js";
+import { normalizeConfig as normalizeConfigData } from "./config.js";
 import { ensureAppDirs, readJson, writeJson } from "./fs.js";
 import { normalizeTask } from "./tasks.js";
 import { nowIso } from "./utils.js";
@@ -10,17 +11,28 @@ export async function loadConfig() {
   const raw = await readJson(CONFIG_PATH);
 
   if (!raw) {
-    const seeded = normalizeConfig(structuredClone(DEFAULT_CONFIG));
+    const seeded = normalizeConfigData(structuredClone(DEFAULT_CONFIG));
     await saveConfig(seeded);
     return seeded;
   }
 
-  return normalizeConfig(raw);
+  return normalizeConfigData(raw, {
+    preserveConfigUpdatedAt: true,
+    preserveTaskState: true,
+    preserveTaskUpdatedAt: true
+  });
 }
 
 export async function saveConfig(config) {
   await ensureAppDirs();
-  await writeJson(CONFIG_PATH, config);
+  const normalized = normalizeConfigData(config, {
+    preserveTaskState: true,
+    preserveTaskUpdatedAt: true
+  });
+  await writeJson(CONFIG_PATH, {
+    ...normalized,
+    updatedAt: nowIso()
+  });
 }
 
 export async function updateConfig(mutator) {
@@ -33,6 +45,9 @@ export async function updateConfig(mutator) {
 export async function addTask(input) {
   const config = await loadConfig();
   const task = normalizeTask(input, config.settings);
+  if (config.tasks.some((item) => item.id === task.id)) {
+    throw new Error(`Task id already exists: ${task.id}`);
+  }
   config.tasks.push(task);
   await saveConfig(config);
   return task;
@@ -94,31 +109,4 @@ export async function listLogs(taskId) {
     }
     throw error;
   }
-}
-
-function normalizeConfig(raw) {
-  const settings = {
-    ...DEFAULT_CONFIG.settings,
-    ...(raw.settings || {})
-  };
-
-  const tasks = (raw.tasks || []).map((task) =>
-    normalizeTask(
-      {
-        ...task,
-        runtime: {
-          ...(task.runtime || {})
-        }
-      },
-      settings
-    )
-  );
-
-  return {
-    version: raw.version || DEFAULT_CONFIG.version,
-    createdAt: raw.createdAt || nowIso(),
-    updatedAt: nowIso(),
-    settings,
-    tasks
-  };
 }
