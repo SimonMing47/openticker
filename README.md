@@ -174,6 +174,7 @@ npm start
 
 - [产品分析与需求拆解](./docs/PRODUCT.md)
 - [架构说明](./docs/ARCHITECTURE.md)
+- [发布说明](./docs/RELEASE.md)
 - [贡献指南](./CONTRIBUTING.md)
 
 ## License
