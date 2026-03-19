@@ -20,22 +20,22 @@ import {
 import { formatDelay, humanizeSchedule, relativeToNow } from "./time.js";
 
 const theme = {
-  bg: "#050816",
-  panel: "#0c1120",
-  panelAlt: "#121934",
-  border: "#44f6ff",
-  accent: "#ff4fd8",
-  success: "#69ffba",
-  warning: "#ffc857",
-  danger: "#ff5d73",
-  text: "#defcff",
-  dim: "#6f8ea8",
-  muted: "#3d536e"
+  bg: "#0b0f14",
+  panel: "#121720",
+  panelAlt: "#171d27",
+  border: "#293241",
+  accent: "#7dd3fc",
+  success: "#8ce99a",
+  warning: "#ffbd59",
+  danger: "#ff7b72",
+  text: "#f5f7fa",
+  dim: "#94a3b8",
+  muted: "#4b5563"
 };
 
 const tagColors = {
-  accent: "magenta",
-  border: "cyan",
+  accent: "cyan",
+  border: "white",
   success: "green",
   warning: "yellow",
   danger: "red",
@@ -221,10 +221,10 @@ export async function startTui() {
       right: 1
     },
     style: {
-      bg: "#07101e",
-      fg: "#c7ffef",
+      bg: theme.panel,
+      fg: theme.text,
       border: {
-        fg: theme.success
+        fg: theme.border
       }
     }
   });
@@ -1211,20 +1211,20 @@ function renderHeader(state) {
   const total = state.config?.tasks.length || 0;
   const enabled = state.config?.tasks.filter((task) => task.enabled).length || 0;
   const daemonLine = state.daemon?.running
-    ? `{${tagColors.success}-fg}守护 在线{/} {${tagColors.dim}-fg}pid ${state.daemon.pid}{/}`
-    : `{${tagColors.warning}-fg}守护 离线{/}`;
+    ? `{${tagColors.success}-fg}守护在线{/} {${tagColors.dim}-fg}pid ${state.daemon.pid}{/}`
+    : `{${tagColors.warning}-fg}守护离线{/}`;
   const serviceLine = !state.service?.installed
-    ? `{${tagColors.dim}-fg}服务 未安装{/}`
+    ? `{${tagColors.dim}-fg}服务未安装{/}`
     : state.service.active
-      ? `{${tagColors.success}-fg}服务 已启动{/}`
-      : `{${tagColors.warning}-fg}服务 已安装{/}`;
+      ? `{${tagColors.success}-fg}服务运行中{/}`
+      : `{${tagColors.warning}-fg}服务已安装{/}`;
   const refreshed = state.lastRefreshAt
     ? dayjs(state.lastRefreshAt).format("HH:mm:ss")
     : "--:--:--";
 
   return [
-    `{bold}{${tagColors.border}-fg}OPEN{/}{${tagColors.accent}-fg}TICKER{/}{/bold} {${tagColors.dim}-fg}// AI CLI 定时控制台{/}`,
-    `{${tagColors.dim}-fg}赛博调度台{/}  {${tagColors.text}-fg}任务 ${enabled}/${total}{/}  ${daemonLine}  ${serviceLine}  {${tagColors.dim}-fg}刷新 ${refreshed}{/}`
+    `{bold}{${tagColors.border}-fg}OPENTICKER{/}{/bold} {${tagColors.dim}-fg}// AI CLI Scheduler{/}`,
+    `{${tagColors.dim}-fg}任务{/} {${tagColors.text}-fg}${enabled}/${total}{/}  {${tagColors.dim}-fg}·{/}  ${daemonLine}  {${tagColors.dim}-fg}·{/}  ${serviceLine}  {${tagColors.dim}-fg}· 刷新 ${refreshed}{/}`
   ].join("\n");
 }
 
@@ -1309,7 +1309,7 @@ async function renderLogPanel(task) {
 function renderFooter() {
   return [
     `{${tagColors.dim}-fg}[n] 新建  [s] 快启  [e] 编辑  [r] 执行  [space] 启停  [x] 删除  [d] 守护  [i] 服务  [?] 帮助  [q] 退出{/}`,
-    `{${tagColors.dim}-fg}提示：主界面保留高频按钮，后台控制收进控制中心；快速启动会预填默认内容。{/}`
+    `{${tagColors.dim}-fg}提示：主界面只保留高频动作，后台管理收进系统面板。{/}`
   ].join("\n");
 }
 
@@ -1560,12 +1560,14 @@ function buttonStyle(color, background = theme.panel) {
       fg: color
     },
     focus: {
-      fg: theme.bg,
-      bg: color
+      fg: theme.text,
+      bg: background,
+      bold: true
     },
     hover: {
-      fg: theme.bg,
-      bg: color
+      fg: theme.text,
+      bg: background,
+      bold: true
     }
   };
 }
