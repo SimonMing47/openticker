@@ -510,16 +510,20 @@ export async function startTui() {
       return;
     }
 
-    notify(`正在执行 ${task.name} ...`, "warning");
-    const result = await runTask(task, state.config.settings);
-    await updateTask(task.id, (currentTask) =>
-      markTaskResult(currentTask, result, { consumeSchedule: false })
-    );
-    notify(
-      `${task.name} 执行完成，退出码 ${result.exitCode}`,
-      result.exitCode === 0 ? "success" : "warning"
-    );
-    await refresh(true);
+    try {
+      notify(`正在执行 ${task.name} ...`, "warning");
+      const result = await runTask(task, state.config.settings);
+      await updateTask(task.id, (currentTask) =>
+        markTaskResult(currentTask, result, { consumeSchedule: false })
+      );
+      notify(
+        `${task.name} 执行完成，退出码 ${result.exitCode}`,
+        result.exitCode === 0 ? "success" : "warning"
+      );
+      await refresh(true);
+    } catch (error) {
+      notify(error.message, "danger");
+    }
   }
 
   async function toggleSelectedTask() {
@@ -529,13 +533,17 @@ export async function startTui() {
       return;
     }
 
-    const nextEnabled = !task.enabled;
-    await updateTask(task.id, (currentTask) => toggleTask(currentTask, nextEnabled));
-    notify(
-      `${task.name} 已${nextEnabled ? "启用" : "停用"}`,
-      nextEnabled ? "success" : "warning"
-    );
-    await refresh(true);
+    try {
+      const nextEnabled = !task.enabled;
+      await updateTask(task.id, (currentTask) => toggleTask(currentTask, nextEnabled));
+      notify(
+        `${task.name} 已${nextEnabled ? "启用" : "停用"}`,
+        nextEnabled ? "success" : "warning"
+      );
+      await refresh(true);
+    } catch (error) {
+      notify(error.message, "danger");
+    }
   }
 
   async function deleteSelectedTask() {
@@ -558,6 +566,8 @@ export async function startTui() {
       await removeTask(task.id);
       state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
       notify(`${task.name} 已删除`, "success");
+    } catch (error) {
+      notify(error.message, "danger");
     } finally {
       state.modalOpen = false;
       await refresh(true);
@@ -565,35 +575,45 @@ export async function startTui() {
   }
 
   async function toggleDaemon() {
-    if (state.daemon?.running) {
-      await stopDetachedDaemon();
-      notify("守护进程已停止", "warning");
-    } else {
-      await startDetachedDaemon();
-      notify("守护进程已启动", "success");
+    try {
+      if (state.daemon?.running) {
+        await stopDetachedDaemon();
+        notify("守护进程已停止", "warning");
+      } else {
+        await startDetachedDaemon();
+        notify("守护进程已启动", "success");
+      }
+      await refresh(true);
+    } catch (error) {
+      notify(error.message, "danger");
     }
-    await refresh(true);
   }
 
   async function toggleService() {
-    if (!state.service?.installed) {
-      await installService();
-      await startService();
-      notify("系统服务已安装并启动", "success");
-    } else if (state.service.active) {
-      await stopService();
-      notify("系统服务已停止", "warning");
-    } else {
-      await startService();
-      notify("系统服务已启动", "success");
+    try {
+      if (!state.service?.installed) {
+        await installService();
+        await startService();
+        notify("系统服务已安装并启动", "success");
+      } else if (state.service.active) {
+        await stopService();
+        notify("系统服务已停止", "warning");
+      } else {
+        await startService();
+        notify("系统服务已启动", "success");
+      }
+      await refresh(true);
+    } catch (error) {
+      notify(error.message, "danger");
     }
-    await refresh(true);
   }
 
   async function openControlCenter() {
     state.modalOpen = true;
     try {
       await showSystemCenter(screen, state);
+    } catch (error) {
+      notify(error.message, "danger");
     } finally {
       state.modalOpen = false;
       await refresh(true);
@@ -747,6 +767,7 @@ async function openTaskEditor(screen, state, options = {}) {
     hint:
       `{${tagColors.dim}-fg}Esc 取消 · Enter 编辑字段 · Space 快切 · Ctrl+S 保存 · Ctrl+R 保存并运行{/}`
   });
+  let submitting = false;
 
   const modalButtons = createButtonRow(
     footerBar,
@@ -763,6 +784,20 @@ async function openTaskEditor(screen, state, options = {}) {
       background: theme.panelAlt
     }
   );
+
+  const setFooterHint = (message, level = "dim") => {
+    if (!footerBar.hintBox) {
+      return;
+    }
+
+    const colorMap = {
+      dim: tagColors.dim,
+      success: tagColors.success,
+      warning: tagColors.warning,
+      danger: tagColors.danger
+    };
+    footerBar.hintBox.setContent(`{${colorMap[level] || tagColors.dim}-fg}${message}{/}`);
+  };
 
   const renderForm = () => {
     rows.splice(0, rows.length, ...buildFormRows(formState, { quick, editing: Boolean(existingTask) }));
@@ -785,37 +820,54 @@ async function openTaskEditor(screen, state, options = {}) {
   };
 
   const save = async (runNow) => {
-    const input = formStateToTaskInput(formState, existingTask, settings);
-    const normalized = normalizeTask(input, settings, {
-      preserveRuntime: Boolean(existingTask),
-      preserveUpdatedAt: Boolean(existingTask)
-    });
-
-    let task;
-    if (existingTask) {
-      task = await updateTask(existingTask.id, () => normalized);
-    } else {
-      task = await addTask(normalized);
-    }
-
-    if (!runNow) {
-      close({
-        task,
-        ranNow: false
-      });
+    if (submitting) {
       return;
     }
 
-    const result = await runTask(task, settings);
-    const updatedTask = await updateTask(task.id, (currentTask) =>
-      markTaskResult(currentTask, result, { consumeSchedule: false })
+    submitting = true;
+    setFooterHint(
+      runNow ? "正在保存并执行，请稍候..." : "正在保存任务，请稍候...",
+      "warning"
     );
+    screen.render();
 
-    close({
-      task: updatedTask,
-      ranNow: true,
-      exitCode: result.exitCode
-    });
+    try {
+      const input = formStateToTaskInput(formState, existingTask, settings);
+      const normalized = normalizeTask(input, settings, {
+        preserveRuntime: Boolean(existingTask),
+        preserveUpdatedAt: Boolean(existingTask)
+      });
+
+      let task;
+      if (existingTask) {
+        task = await updateTask(existingTask.id, () => normalized);
+      } else {
+        task = await addTask(normalized);
+      }
+
+      if (!runNow) {
+        close({
+          task,
+          ranNow: false
+        });
+        return;
+      }
+
+      const result = await runTask(task, settings);
+      const updatedTask = await updateTask(task.id, (currentTask) =>
+        markTaskResult(currentTask, result, { consumeSchedule: false })
+      );
+
+      close({
+        task: updatedTask,
+        ranNow: true,
+        exitCode: result.exitCode
+      });
+    } catch (error) {
+      submitting = false;
+      setFooterHint(error.message, "danger");
+      screen.render();
+    }
   };
 
   let resolver;
@@ -850,6 +902,9 @@ async function openTaskEditor(screen, state, options = {}) {
   });
 
   async function editSelectedRow(quickCycle = false) {
+    if (submitting) {
+      return;
+    }
     const row = rows[selectedIndex];
     if (!row) {
       return;
@@ -1448,7 +1503,7 @@ function createModalFooter(parent, options = {}) {
   });
 
   if (options.hint) {
-    blessed.box({
+    footer.hintBox = blessed.box({
       parent: footer,
       top: 0,
       left: 1,
@@ -1505,11 +1560,13 @@ function layoutButtonRow(parent, buttons, options = {}) {
   const right = options.right ?? 1;
   const minWidth = options.minWidth ?? 12;
   const parentWidth = resolveElementWidth(parent);
-  const totalWidth = Math.max(
+  const availableWidth = Math.max(
     parentWidth - left - right - gap * (buttons.length - 1),
-    buttons.length * minWidth
+    buttons.length * 6
   );
-  const buttonWidth = Math.max(Math.floor(totalWidth / buttons.length), minWidth);
+  const idealWidth = Math.floor(availableWidth / buttons.length);
+  const buttonWidth =
+    idealWidth >= minWidth ? idealWidth : Math.max(idealWidth, 6);
 
   buttons.forEach((button, index) => {
     button.top = options.top ?? 1;
@@ -1992,6 +2049,7 @@ async function showSystemCenter(screen, state) {
   const footerBar = createModalFooter(modal, {
     hint: `{${tagColors.dim}-fg}Enter 执行按钮 · Esc 关闭{/}`
   });
+  let busy = false;
 
   const footerButtons = createButtonRow(
     footerBar,
@@ -2008,6 +2066,20 @@ async function showSystemCenter(screen, state) {
       background: theme.panelAlt
     }
   );
+
+  const setFooterHint = (message, level = "dim") => {
+    if (!footerBar.hintBox) {
+      return;
+    }
+
+    const colorMap = {
+      dim: tagColors.dim,
+      success: tagColors.success,
+      warning: tagColors.warning,
+      danger: tagColors.danger
+    };
+    footerBar.hintBox.setContent(`{${colorMap[level] || tagColors.dim}-fg}${message}{/}`);
+  };
 
   function renderStatus() {
     const daemon = state.daemon || { running: false };
@@ -2064,24 +2136,54 @@ async function showSystemCenter(screen, state) {
   }
 
   async function toggleDaemonInside() {
-    if (state.daemon?.running) {
-      await stopDetachedDaemon();
-    } else {
-      await startDetachedDaemon();
+    if (busy) {
+      return;
     }
-    await refreshState();
+
+    busy = true;
+    setFooterHint("正在更新守护进程状态...", "warning");
+    screen.render();
+    try {
+      if (state.daemon?.running) {
+        await stopDetachedDaemon();
+      } else {
+        await startDetachedDaemon();
+      }
+      await refreshState();
+      setFooterHint("守护进程状态已更新。", "success");
+    } catch (error) {
+      setFooterHint(error.message, "danger");
+      screen.render();
+    } finally {
+      busy = false;
+    }
   }
 
   async function toggleServiceInside() {
-    if (!state.service?.installed) {
-      await installService();
-      await startService();
-    } else if (state.service.active) {
-      await stopService();
-    } else {
-      await startService();
+    if (busy) {
+      return;
     }
-    await refreshState();
+
+    busy = true;
+    setFooterHint("正在更新系统服务状态...", "warning");
+    screen.render();
+    try {
+      if (!state.service?.installed) {
+        await installService();
+        await startService();
+      } else if (state.service.active) {
+        await stopService();
+      } else {
+        await startService();
+      }
+      await refreshState();
+      setFooterHint("系统服务状态已更新。", "success");
+    } catch (error) {
+      setFooterHint(error.message, "danger");
+      screen.render();
+    } finally {
+      busy = false;
+    }
   }
 
   await refreshState();
